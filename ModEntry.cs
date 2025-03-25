@@ -174,7 +174,9 @@ namespace TimeleftMod
             string outputName = output?.DisplayName ?? "???";
             string inputName = "???";
             string inputId = "???";
+            int requiredCount = 1; // Default to 1 if not found
 
+            // First get input info from preserved data or last input
             if (output != null && output.preservedParentSheetIndex.Value != null && output.preservedParentSheetIndex.Value != "-1")
             {
                 inputId = $"(O){output.preservedParentSheetIndex.Value}";
@@ -187,28 +189,30 @@ namespace TimeleftMod
                 inputName = machine.lastInputItem.Value.DisplayName;
                 inputId = machine.lastInputItem.Value.QualifiedItemId;
             }
-            else if (machine.GetMachineData() is MachineData machineData)
+
+            // Then check machine data to find REQUIRED COUNT
+            if (machine.GetMachineData() is MachineData machineData)
             {
                 foreach (MachineOutputRule rule in machineData.OutputRules)
                 {
                     foreach (MachineOutputTriggerRule trigger in rule.Triggers)
                     {
-                        if (trigger.RequiredItemId != null)
+                        // Match by input ID we found earlier
+                        if (trigger.RequiredItemId == inputId)
                         {
-                            inputId = trigger.RequiredItemId;
-                            ParsedItemData inputData = ItemRegistry.GetData(inputId);
-                            if (inputData != null)
-                                inputName = inputData.DisplayName;
-                            break;
-                        }
-                        else if (trigger.RequiredTags != null && trigger.RequiredTags.Contains("egg_item"))
-                        {
-                            inputName = "Unknown";
+                            requiredCount = trigger.RequiredCount > 0 ? trigger.RequiredCount : 1;
                             break;
                         }
                     }
-                    if (inputName != "???") break;
                 }
+            }
+
+            // If we still don't have input name, try to get it from ID
+            if (inputName == "???" && inputId != "???")
+            {
+                ParsedItemData inputData = ItemRegistry.GetData(inputId);
+                if (inputData != null)
+                    inputName = inputData.DisplayName;
             }
 
             int minutesLeft = machine.MinutesUntilReady;
@@ -225,7 +229,7 @@ namespace TimeleftMod
             }
             else
             {
-                hoverText = $"{machineName}\n1 {inputName} → 1 {outputName}\nTime left: {timeText}";
+                hoverText = $"{machineName}\n{requiredCount} {inputName} → 1 {outputName}\nTime left: {timeText}";
             }
 
             DrawHoverText(spriteBatch, hoverText);
